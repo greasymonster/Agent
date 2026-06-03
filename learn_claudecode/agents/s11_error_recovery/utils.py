@@ -12,6 +12,7 @@ except ImportError:
 from anthropic import Anthropic
 from dotenv import load_dotenv
 from pathlib import Path
+import random
 import time
 import json
 import os
@@ -24,6 +25,7 @@ WORKDIR = Path.cwd()
 MEMORY_DIR = WORKDIR / ".memory"; MEMORY_DIR.mkdir(exist_ok=True)
 MEMORY_INDEX = MEMORY_DIR / "MEMORY.md"
 MODEL = os.environ["MODEL_ID"]
+PRIMARY_MODEL = os.environ["MODEL_ID"]
 SKILLS_DIR = WORKDIR / "skills"
 TRANSCRIPT_DIR = WORKDIR / ".transcripts"
 TOOL_RESULTS_DIR = WORKDIR / ".task_outputs" / "tool-results"
@@ -475,7 +477,9 @@ def consolidate_memories():
         print(f"\n\033[33m[Memory: consolidated {len(files)} → {len(items)} memories]\033[0m")
     except Exception:
         pass
-
+# =====================================================================================================
+# agent系统提示词动态加载部分
+# =====================================================================================================
 PROMPT_SECTIONS = {
     "identity": "You are a coding agent. Act, don't explain.",
     "tools": "Available tools: bash, read_file, write_file.",
@@ -513,3 +517,87 @@ def get_system_prompt(context:dict) ->str:
         loaded.append("memory")
     print(f" \033[32m[assembled] sections: {', '.join(loaded)}\033[0m")
     return _last_prompt 
+
+# =====================================================================================================
+# agent报错处理部分
+# =====================================================================================================
+FALLBACK_MODEL = os.getenv("FALLBACK_MODEL_ID")
+BASE_DELAY_MS = 500
+ESCALATED_MAX_TOKENS = 64000
+DEFAULT_MAX_TOKENS = 8000
+MAX_RECOVERY_RETRIES = 3
+MAX_RETRIES = 10
+MAX_CONSECUTIVE_529 = 3
+CONTINUATION_PROMPT = (
+    "Output token limit hit. Resume directly — "
+    "no apology, no recap. Pick up mid-thought."
+)
+
+class RecoveryState:
+    def __init__(self):
+        self.has_escalated = False
+        self.recovery_count = 0
+        self.consecutive_529 = 0
+        self.has_attempted_reactive_compact = False
+        self.current_model = PRIMARY_MODEL
+    
+def retry_delay(attempt, retry_after=None):
+    if retry_after:
+        return retry_after
+    
+    base = min(BASE_DELAY_MS * (2 ** attempt), 32000)
+    jitter = random.uniform(0, base * 0.25)
+    return base + jitter
+
+def with_retry(fn, state: RecoveryState):
+    for attempt in range(MAX_RETRIES):
+        try:
+            result = fn()
+            state.consecutive_529 = 0
+            return result
+        except Exception as e:
+            name = type(e).__name__
+            msg = str(e).lower()
+
+            if "ratelimit" in name.lower() or "429" in msg:
+                delay = retry_delay(attempt=attempt)
+                print(f" \033[33m[429 rate limit] retry {attempt + 1} / {MAX_RETRIES},"
+                      f"wait {delay:.1f}s\033[0m")
+                time.sleep(delay)
+                continue
+
+            if "overloaded" in name.lower() or "529" in msg or "overloaded" in msg:
+                state.consecutive_529 += 1
+                if state.consecutive_529 >= MAX_CONSECUTIVE_529:
+                    if FALLBACK_MODEL:
+                        state.current_model = FALLBACK_MODEL
+                        state.consecutive_529 = 0
+                        print(f" \033[31m[529 x {MAX_CONSECUTIVE_529}]"
+                              f"no FALLBACK_MODEL_ID configured, continuing retry\033[0m")
+                    else:
+                        state.consecutive_529 = 0
+                        print(f"  \033[31m[529 x{MAX_CONSECUTIVE_529}]"
+                              f" no FALLBACK_MODEL_ID configured, continuing retry\033[0m")
+                delay = retry_delay(attempt)
+                print(f" \033[33m[529 overloaded retry] {attempt + 1}/{MAX_RETRIES},"
+                      f"wait {delay:.1f}s\033[0m")
+                time.sleep(delay)
+                continue
+            raise
+    raise RuntimeError(f"Max retries ({MAX_RETRIES}) exceeded")
+
+def reactive_compact(messages: list) ->list:
+    print(" \033[31m[reactive ciompact] trimming to last 5 messages\033[0m")
+    tail = messages[-5:]
+    return [{
+        "role": "user",
+        "content": "[Reactive compact] Earlier conversation trimmed.""Continue from where you left off."
+    }, tail]
+
+def is_prompt_too_long_error(e: Exception) -> bool:
+    """Check whether an API error indicates prompt/context too long."""
+    msg = str(e).lower()
+    return (("prompt" in msg and "long" in msg)
+            or "prompt_is_too_long" in msg
+            or "context_length_exceeded" in msg
+            or "max_context_window" in msg)

@@ -47,6 +47,7 @@ WORKDIR = Path.cwd()
 client = Anthropic(base_url=os.getenv("ANTHROPIC_BASE_URL"))
 MODEL = os.environ["MODEL_ID"]
 MAX_REACTIVE_RETRIES = 1
+DEFAULT_MAX_TOKENS = 8000
 # =====================================================================================================
 # 工具调用配置部分
 # =====================================================================================================
@@ -110,6 +111,8 @@ def agnet_loop(messages: list, context: dict):
 
     SYSTEM = get_system_prompt(context=context)
     reactive_retries = 0
+    state = RecoveryState()
+    max_tokens = DEFAULT_MAX_TOKENS
     memories_content = load_memories(messages)
     memory_turn = len(messages) - 1 if messages and isinstance(messages[-1].get("content"), str) else None
 
@@ -136,15 +139,58 @@ def agnet_loop(messages: list, context: dict):
                     **messages[memory_turn],
                     "content": memories_content + "\n\n" + messages[memory_turn]["content"],
                 }
-            response = client.messages.create(model=MODEL, system=SYSTEM, messages=request_messages, tools=TOOLS, max_tokens=8000)
+            response = with_retry(
+                lambda mt=max_tokens, mdl=state.current_model:
+                    client.messages.create(model=mdl, 
+                                           system=SYSTEM, 
+                                           messages=request_messages, 
+                                           tools=TOOLS, 
+                                           max_tokens=mt)
+            )
             reactive_retries = 0
         except Exception as e:
-            if ("prompt_too_long" in str(e).lower() or "too many tokens" in str(e).lower()) and reactive_retries < MAX_REACTIVE_RETRIES:
-                print("[reactive compact]")
-                messages[:] = reactive_compact(messages)
-                reactive_retries += 1
+            if is_prompt_too_long_error(e):
+                if not state.has_attempted_reactive_compact:
+                    messages[:] = reactive_compact(messages)
+                    state.has_attempted_reactive_compact = True
+                    continue
+                print(" \033[31m[unrecoverable] still too long agter compact\033[0m")
+                messages.append({
+                    "role": "assistant",
+                    "content": {{
+                        "type": "text",
+                        "text": "[Error] Context too large, cannot continue."
+                    }}
+                })
+                return
+            
+            name = type(e).__name__
+            print(f" \033[31m [unrecoverable] {name}: {str(e)[:100]}\033[0m")
+            messages.append({
+                "role": "assistant",
+                "content": [{
+                    "type": "text",
+                    "text": f"[Error] {name}: {str(e)[:200]}"
+                }]
+            })
+            return
+        
+        if response.stop_reason == "max_tokens":
+            if not state.has_escalated:
+                max_tokens = ESCALATED_MAX_TOKENS
+                state.has_escalated = True
+                print(f" \033[33m[max_tokens] escalating"
+                      f"{DEFAULT_MAX_TOKENS} -> {ESCALATED_MAX_TOKENS}\033[0m")
                 continue
-            raise
+            messages.append({"role": "assistant", "content": response.content})
+            if state.recovery_count < MAX_RECOVERY_RETRIES:
+                messages.append({"role": "user", "content": CONTINUATION_PROMPT})
+                state.recovery_count += 1
+                print(f" \033[33m[max_tokens] continuation"
+                      f" {state.recovery_count} / {MAX_RECOVERY_RETRIES}\033[0m")
+                continue
+            print(" \033[31m[max_tokens] recovery limit reached\033[0m")
+            return
 
         messages.append({"role": "assistant", "content": response.content})
 
