@@ -592,7 +592,7 @@ def reactive_compact_error(messages: list) ->list:
     return [{
         "role": "user",
         "content": "[Reactive compact] Earlier conversation trimmed.""Continue from where you left off."
-    }, tail]
+    }, *tail]
 
 def is_prompt_too_long_error(e: Exception) -> bool:
     """Check whether an API error indicates prompt/context too long."""
