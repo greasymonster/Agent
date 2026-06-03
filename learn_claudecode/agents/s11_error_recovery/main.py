@@ -89,7 +89,7 @@ register_hook("PostToolUse", large_output_hook)
 register_hook("Stop", summary_hook)
 
 
-def updata_context(context: dict, messages: list)-> dict:
+def update_context(context: dict, messages: list)-> dict:
     memories = ""
     if MEMORY_INDEX.exists():
         content = MEMORY_INDEX.read_text().strip()
@@ -128,7 +128,7 @@ def agnet_loop(messages: list, context: dict):
             messages[:] = compact_history(messages)
 
         if rounds_since_todo >= 3 and messages:
-            messages.append({"role": "user", "content": "<reminder>Updata your todos.<reminder>"})
+            messages.append({"role": "user", "content": "<reminder>Update your todos.<reminder>"})
             rounds_since_todo = 0
         
         try:
@@ -154,7 +154,7 @@ def agnet_loop(messages: list, context: dict):
                     messages[:] = reactive_compact(messages)
                     state.has_attempted_reactive_compact = True
                     continue
-                print(" \033[31m[unrecoverable] still too long agter compact\033[0m")
+                print(" \033[31m[unrecoverable] still too long after compact\033[0m")
                 messages.append({
                     "role": "assistant",
                     "content": {{
@@ -232,7 +232,7 @@ def agnet_loop(messages: list, context: dict):
         
         else:
             messages.append({"role": "user", "content": results})
-            context = updata_context(context, messages)
+            context = update_context(context, messages)
             SYSTEM = get_system_prompt(context)
             continue
         continue
@@ -242,10 +242,10 @@ if __name__ == "__main__":
     print("s11: error recovery")
     print("Type a question, press Enter. Type q to quit.\n")
     history = []
-    context = updata_context({}, [])
+    context = update_context({}, [])
     while True:
         try:
-            query = input("\033[36ms09 >> \033[0m")
+            query = input("\033[36ms011 >> \033[0m")
         except (EOFError, KeyboardInterrupt):
             break
 

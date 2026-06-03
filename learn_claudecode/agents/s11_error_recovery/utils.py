@@ -507,7 +507,7 @@ def get_system_prompt(context:dict) ->str:
     global _last_context_key, _last_prompt
     key = json.dumps(context, sort_keys=True, ensure_ascii=False, default=str)
     if key == _last_context_key and _last_prompt:
-        print(" \033[90m[cache hit] system prompt unchaged\033[0m")
+        print(" \033[90m[cache hit] system prompt unchanged\033[0m")
         return _last_prompt
     _last_context_key = key
     _last_prompt = assemble_system_prompt(context=context)
@@ -587,7 +587,7 @@ def with_retry(fn, state: RecoveryState):
     raise RuntimeError(f"Max retries ({MAX_RETRIES}) exceeded")
 
 def reactive_compact(messages: list) ->list:
-    print(" \033[31m[reactive ciompact] trimming to last 5 messages\033[0m")
+    print(" \033[31m[reactive compact] trimming to last 5 messages\033[0m")
     tail = messages[-5:]
     return [{
         "role": "user",
