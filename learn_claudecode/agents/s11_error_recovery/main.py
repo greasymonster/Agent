@@ -145,22 +145,22 @@ def agnet_loop(messages: list, context: dict):
                                            system=SYSTEM, 
                                            messages=request_messages, 
                                            tools=TOOLS, 
-                                           max_tokens=mt)
+                                           max_tokens=mt), state
             )
             reactive_retries = 0
         except Exception as e:
             if is_prompt_too_long_error(e):
                 if not state.has_attempted_reactive_compact:
-                    messages[:] = reactive_compact(messages)
+                    messages[:] = reactive_compact_error(messages)
                     state.has_attempted_reactive_compact = True
                     continue
                 print(" \033[31m[unrecoverable] still too long after compact\033[0m")
                 messages.append({
                     "role": "assistant",
-                    "content": {{
+                    "content": [{
                         "type": "text",
                         "text": "[Error] Context too large, cannot continue."
-                    }}
+                    }]
                 })
                 return
             
@@ -183,6 +183,7 @@ def agnet_loop(messages: list, context: dict):
                       f"{DEFAULT_MAX_TOKENS} -> {ESCALATED_MAX_TOKENS}\033[0m")
                 continue
             messages.append({"role": "assistant", "content": response.content})
+            
             if state.recovery_count < MAX_RECOVERY_RETRIES:
                 messages.append({"role": "user", "content": CONTINUATION_PROMPT})
                 state.recovery_count += 1

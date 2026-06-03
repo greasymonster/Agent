@@ -573,7 +573,7 @@ def with_retry(fn, state: RecoveryState):
                         state.current_model = FALLBACK_MODEL
                         state.consecutive_529 = 0
                         print(f" \033[31m[529 x {MAX_CONSECUTIVE_529}]"
-                              f"no FALLBACK_MODEL_ID configured, continuing retry\033[0m")
+                              f"switching to {FALLBACK_MODEL}\033[0m")
                     else:
                         state.consecutive_529 = 0
                         print(f"  \033[31m[529 x{MAX_CONSECUTIVE_529}]"
@@ -586,7 +586,7 @@ def with_retry(fn, state: RecoveryState):
             raise
     raise RuntimeError(f"Max retries ({MAX_RETRIES}) exceeded")
 
-def reactive_compact(messages: list) ->list:
+def reactive_compact_error(messages: list) ->list:
     print(" \033[31m[reactive compact] trimming to last 5 messages\033[0m")
     tail = messages[-5:]
     return [{
