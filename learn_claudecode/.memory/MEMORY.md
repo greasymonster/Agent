@@ -1,2 +1,3 @@
 - [tabs-over-spaces](tabs-over-spaces.md) - User prefers tabs over spaces for indentation.
+- [task-dependencies](task-dependencies.md) - Task dependencies for project: schema, endpoints, tests, docs
 - [update-todos](update-todos.md) - User reminder to update todos
