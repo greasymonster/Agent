@@ -2,7 +2,7 @@
   "id": "task_1780732419_3793",
   "subject": "Setup project",
   "description": "Setup the project environment and dependencies",
-  "status": "pending",
-  "owner": null,
+  "status": "in_progress",
+  "owner": "alice",
   "blockedBy": []
 }

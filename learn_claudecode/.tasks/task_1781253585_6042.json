@@ -1,0 +1,8 @@
+{
+  "id": "task_1781253585_6042",
+  "subject": "Build authentication module",
+  "description": "Implement JWT-based authentication with login, register, and token refresh endpoints.",
+  "status": "in_progress",
+  "owner": "alice",
+  "blockedBy": []
+}

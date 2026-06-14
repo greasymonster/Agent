@@ -1,0 +1,8 @@
+{
+  "id": "task_1781253585_3858",
+  "subject": "Write API integration tests",
+  "description": "Cover all main API endpoints with integration tests using pytest and test containers.",
+  "status": "in_progress",
+  "owner": "alice",
+  "blockedBy": []
+}
